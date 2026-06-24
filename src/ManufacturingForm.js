@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 const defaultData = {
   // 공통
   docNo: 'KPXGC-R41-',
+  docType: 'Be품',
   productName: '',
   drafter: '',
   reviewer: '',
@@ -114,6 +115,12 @@ export default function ManufacturingForm({ initialData, onDataChange }) {
       {/* ───── 공통 헤더 정보 ───── */}
       <Section title="📋 공통 헤더 정보">
         <Grid cols={3}>
+          <Field label="문서 유형">
+            <select className={inputCls} value={data.docType||'Be품'} onChange={e => update('docType', e.target.value)}>
+              <option value="Be품">제조법 문서 (Be품)</option>
+              <option value="일반">제조법 문서</option>
+            </select>
+          </Field>
           <Field label="문서번호 (제조법)">
             <input className={inputCls} value={data.docNo} onChange={e => update('docNo', e.target.value)} />
           </Field>
