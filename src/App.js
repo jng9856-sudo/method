@@ -3,6 +3,7 @@ import ManufacturingForm from './ManufacturingForm';
 import PrintPreview from './PrintPreview';
 import DocumentList from './DocumentList';
 import { supabase } from './supabaseClient';
+import { generateAndDownload } from './generateDocx';
 
 const defaultData = {
   docNo: 'KPXGC-R41-',
@@ -123,23 +124,7 @@ export default function App() {
 
   const handleDownloadDocx = async () => {
     try {
-      const res = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-      });
-      const json = await res.json();
-      if (json.error) { alert('오류: ' + json.error); return; }
-      const bytes = atob(json.file);
-      const arr = new Uint8Array(bytes.length);
-      for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
-      const blob = new Blob([arr], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${formData.productName || '제조법'}_제조법.docx`;
-      a.click();
-      URL.revokeObjectURL(url);
+      await generateAndDownload(formData);
     } catch(e) {
       alert('다운로드 실패: ' + e.message);
     }
