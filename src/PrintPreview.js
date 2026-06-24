@@ -1,522 +1,221 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
-function Val({ value, changed }) {
-  if (value === undefined || value === null || value === '') return null;
-  if (changed) return <span style={{fontWeight:'bold', fontStyle:'italic', textDecoration:'underline'}}>{value}</span>;
-  return <>{value}</>;
+const inp = {width:'100%',border:'1px solid #d1d5db',borderRadius:4,padding:'4px 8px',fontSize:13,outline:'none',boxSizing:'border-box',fontFamily:'inherit'};
+const lbl = {display:'block',fontSize:12,fontWeight:600,color:'#555',marginBottom:3};
+const thS = {border:'1px solid #ccc',padding:'6px 8px',fontWeight:700,fontSize:12,textAlign:'center',background:'#e8f0fe'};
+const tdS = {border:'1px solid #ccc',padding:4};
+
+function Section({title,children}){
+  return(
+    <div style={{background:'white',borderRadius:8,boxShadow:'0 1px 4px rgba(0,0,0,0.1)',overflow:'hidden'}}>
+      <div style={{background:'#1a3a5c',color:'white',padding:'10px 16px',fontWeight:700,fontSize:14}}>{title}</div>
+      <div style={{padding:16}}>{children}</div>
+    </div>
+  );
+}
+function Grid({cols=2,children}){
+  return <div style={{display:'grid',gridTemplateColumns:`repeat(${cols},1fr)`,gap:12}}>{children}</div>;
+}
+function Field({label,children}){
+  return <div><label style={lbl}>{label}</label>{children}</div>;
+}
+function Inp({value,onChange,placeholder}){
+  return <input style={inp} value={value||''} onChange={onChange} placeholder={placeholder||''}/>;
+}
+function Btn({onClick,color,children}){
+  return <button onClick={onClick} style={{background:color||'#3b82f6',color:'white',border:'none',borderRadius:4,padding:'5px 12px',cursor:'pointer',fontSize:13}}>{children}</button>;
 }
 
-const S = {
-  td:     { border:'1px solid #000', padding:'2px 4px', fontSize:'8.5pt', fontFamily:"'맑은 고딕','Malgun Gothic',sans-serif", verticalAlign:'middle' },
-  thGray: { border:'1px solid #000', padding:'2px 4px', fontSize:'8.5pt', fontFamily:"'맑은 고딕','Malgun Gothic',sans-serif", verticalAlign:'middle', background:'#d9d9d9', fontWeight:'bold', textAlign:'center' },
-  center: { textAlign:'center' },
+const defaultData = {
+  docNo:'KPXGC-R41-', docType:'Be품', productName:'',
+  drafter:'', reviewer:'', approver:'',
+  establishDate:'2009년 01월 15일', revisionDate:'', revisionNo:'',
+  materials:[
+    {order:'C',name:'',amount:'',note:'',changed:false},
+    {order:'B',name:'',amount:'',note:'',changed:false},
+    {order:'A',name:'',amount:'',note:'',changed:false},
+    {order:'',name:'',amount:'',note:'',changed:false},
+    {order:'',name:'',amount:'',note:'',changed:false},
+  ],
+  totalAmount:'',
+  specs:[
+    {order:'D',item:'외       관',spec:'투명균일액상',method:'KPS-R42-3007',changed:false},
+    {order:'C',item:'색       상',spec:'',method:'KPS-R42-3009',changed:false},
+    {order:'B',item:'수   분 (%)',spec:'',method:'KPS-R42-3003',changed:false},
+    {order:'A',item:'평균분자량',spec:'',method:'KPS-R42-3067',changed:false},
+    {order:'',item:'',spec:'',method:'',changed:false},
+  ],
+  flowConditions:{
+    starter:'',catalyst:'',reactant:'',
+    reactionTemp:'140',reactionPressure:'4',
+    agingTemp:'140',agingPressure:'4',
+    deodorTemp:'80',packingTemp:'60',
+    reactorNo:'V-302',packageType:'Steel Drum (Net.Wt. : 230 kg)',
+    storage:'옥내외에 저장하고 보존기간은 생산일로부터 1년으로 하며, 선입선출을 원칙으로 한다.',
+    handling:'피부나 눈에 접촉시 약간의 자극을 줄 수 있으므로 보호구 및 안전장갑을 착용, 취급한다.',
+    disposal:'폐기물관리법 제 25 조에 준한다.',
+    hazardous:'해당없음',
+  },
+  revisionNote:'',
+  distributionMfg:'케미칼생산팀 사본 1부',
+  distributionQuality:'케미칼품질팀 사본 2부',
+  qaDocNo:'KPXGC-R32-', qaRevisionDate:'', qaRevisionNo:'',
+  qaSpecs:[
+    {item:'외    관',spec:'',changed:false},
+    {item:'색    상',spec:'',changed:false},
+    {item:'수분 (%)',spec:'',changed:false},
+    {item:'평균분자량',spec:'',changed:false},
+  ],
+  qaPreservation:'2 년',
+  qaDistribution:'케미칼 품질팀 사본 1부',
+  qaRevisionNote:'',
 };
 
-export default function PrintPreview({ data }) {
-  if (!data) return null;
-  const d = data;
-  const fc = d.flowConditions || {};
-  const docType = d.docType || 'Be품'; // 'Be품' or '일반'
+export default function ManufacturingForm({initialData,onDataChange}){
+  const [data,setData]=useState(initialData||defaultData);
+  useEffect(()=>{if(initialData)setData(initialData);},[initialData]);
 
-  const matRows = [...(d.materials || [])];
-  while (matRows.length < 10) matRows.push({ order:'', name:'', amount:'', note:'', changed:false });
+  const upd=(f,v)=>{const n={...data,[f]:v};setData(n);onDataChange&&onDataChange(n);};
+  const updN=(f,s,v)=>{const n={...data,[f]:{...data[f],[s]:v}};setData(n);onDataChange&&onDataChange(n);};
+  const updR=(arr,i,k,v)=>{const n={...data,[arr]:data[arr].map((r,j)=>j===i?{...r,[k]:v}:r)};setData(n);onDataChange&&onDataChange(n);};
+  const addR=(arr,t)=>{const n={...data,[arr]:[...data[arr],t]};setData(n);onDataChange&&onDataChange(n);};
+  const delR=(arr,i)=>{const n={...data,[arr]:data[arr].filter((_,j)=>j!==i)};setData(n);onDataChange&&onDataChange(n);};
 
-  const specRows = [...(d.specs || [])];
-  while (specRows.length < 8) specRows.push({ order:'', item:'', spec:'', method:'', changed:false });
+  return(
+    <div style={{display:'flex',flexDirection:'column',gap:24}}>
 
-  const specForAnalysis = d.specs?.filter(s => s.item && s.spec) || [];
+      <Section title="📋 공통 헤더 정보">
+        <Grid cols={3}>
+          <Field label="문서 유형">
+            <select style={inp} value={data.docType||'Be품'} onChange={e=>upd('docType',e.target.value)}>
+              <option value="Be품">제조법 문서 (Be품)</option>
+              <option value="일반">제조법 문서</option>
+            </select>
+          </Field>
+          <Field label="문서번호 (제조법)"><Inp value={data.docNo} onChange={e=>upd('docNo',e.target.value)}/></Field>
+          <Field label="제품명"><Inp value={data.productName} onChange={e=>upd('productName',e.target.value)} placeholder="예) PEG-400Be"/></Field>
+          <Field label="제정일자"><Inp value={data.establishDate} onChange={e=>upd('establishDate',e.target.value)}/></Field>
+          <Field label="개정일자"><Inp value={data.revisionDate} onChange={e=>upd('revisionDate',e.target.value)} placeholder="YYYY년 MM월 DD일"/></Field>
+          <Field label="개정번호"><Inp value={data.revisionNo} onChange={e=>upd('revisionNo',e.target.value)} placeholder="예) 1"/></Field>
+          <Field label="작성"><Inp value={data.drafter} onChange={e=>upd('drafter',e.target.value)}/></Field>
+          <Field label="검토"><Inp value={data.reviewer} onChange={e=>upd('reviewer',e.target.value)}/></Field>
+          <Field label="승인"><Inp value={data.approver} onChange={e=>upd('approver',e.target.value)}/></Field>
+        </Grid>
+      </Section>
 
-  const pageStyle = {
-    width: '210mm',
-    minHeight: '290mm',
-    margin: '0 auto 16px',
-    padding: '7mm 9mm',
-    background: 'white',
-    boxSizing: 'border-box',
-    boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-  };
-
-  const tbl = { width:'100%', borderCollapse:'collapse', tableLayout:'fixed' };
-
-  // 문서 유형 라벨
-  const docLabel = docType === 'Be품' ? '제조법 문서 (Be품)' : '제조법 문서';
-
-  // 헤더 공통 컴포넌트
-  const PageHeader1 = ({ page }) => (
-    <table style={{...tbl, marginBottom:'3px'}}>
-      <colgroup>
-        <col style={{width:'13%'}}/>{/* 문서번호 라벨 */}
-        <col style={{width:'30%'}}/>{/* 제품명 - 넓게 */}
-        <col style={{width:'7%'}}/>{/* 작성 */}
-        <col style={{width:'12%'}}/>{/* 작성서명 */}
-        <col style={{width:'7%'}}/>{/* 검토 */}
-        <col style={{width:'12%'}}/>{/* 검토서명 */}
-        <col style={{width:'7%'}}/>{/* 승인 */}
-        <col style={{width:'12%'}}/>{/* 승인서명 */}
-      </colgroup>
-      <tbody>
-        <tr style={{height:'20px'}}>
-          <td style={{...S.thGray}}>문 서 번 호</td>
-          <td style={{...S.thGray}}>{docLabel}</td>
-          <td style={{...S.thGray}}>작성</td>
-          <td style={{...S.td,...S.center}}></td>
-          <td style={{...S.thGray}}>검토</td>
-          <td style={{...S.td,...S.center}}></td>
-          <td style={{...S.thGray}}>승인</td>
-          <td style={{...S.td,...S.center}}></td>
-        </tr>
-        <tr style={{height:'18px'}}>
-          <td style={{...S.td,...S.center, fontSize:'7.5pt'}}>{d.docNo}</td>
-          <td style={{...S.td,...S.center, fontWeight:'bold'}}>{d.productName}</td>
-          <td style={{...S.td,...S.center, fontSize:'7.5pt'}}>작성</td>
-          <td style={{...S.td,...S.center, fontSize:'7.5pt'}}>/ {d.drafter}</td>
-          <td style={{...S.td,...S.center, fontSize:'7.5pt'}}>검토</td>
-          <td style={{...S.td,...S.center, fontSize:'7.5pt'}}>/ {d.reviewer}</td>
-          <td style={{...S.td,...S.center, fontSize:'7.5pt'}}>승인</td>
-          <td style={{...S.td,...S.center, fontSize:'7.5pt'}}>/ {d.approver}</td>
-        </tr>
-        <tr style={{height:'15px'}}>
-          <td style={{...S.thGray, fontSize:'7.5pt'}}>제정일자</td>
-          <td style={{...S.td,...S.center, fontSize:'7.5pt'}}>{d.establishDate}</td>
-          <td style={{...S.thGray, fontSize:'7.5pt'}}>개정일자</td>
-          <td colSpan={2} style={{...S.td,...S.center, fontSize:'7.5pt'}}>{d.revisionDate}</td>
-          <td style={{...S.thGray, fontSize:'7.5pt'}}>개정번호</td>
-          <td style={{...S.td,...S.center, fontSize:'7.5pt'}}>{d.revisionNo}</td>
-          <td style={{...S.td,...S.center, fontSize:'7.5pt'}}>{page}/4</td>
-        </tr>
-      </tbody>
-    </table>
-  );
-
-  const SubHeader = ({ page }) => (
-    <table style={{...tbl, marginBottom:'3px'}}>
-      <colgroup><col style={{width:'50%'}}/><col style={{width:'50%'}}/></colgroup>
-      <tbody>
-        <tr style={{height:'18px'}}>
-          <td style={{...S.thGray}}>{docLabel}</td>
-          <td style={{...S.td,...S.center, fontWeight:'bold'}}>{d.productName}</td>
-        </tr>
-        <tr style={{height:'14px'}}>
-          <td style={{...S.thGray, fontSize:'7.5pt'}}>제정일자</td>
-          <td style={{...S.td, fontSize:'7.5pt'}}>
-            {d.establishDate}&nbsp;&nbsp;개정일자 {d.revisionDate}&nbsp;&nbsp;개정번호 {d.revisionNo}&nbsp;&nbsp;페이지 {page}/4
-          </td>
-        </tr>
-      </tbody>
-    </table>
-  );
-
-  return (
-    <div id="print-area">
-
-      {/* ══ PAGE 1/4 ══ */}
-      <div className="print-page" style={pageStyle}>
-        <div style={{textAlign:'right', fontSize:'9pt', fontWeight:'bold', fontFamily:"'맑은 고딕','Malgun Gothic',sans-serif", marginBottom:'2px'}}>그린케미칼(주)</div>
-        <PageHeader1 page="1" />
-
-        {/* 1.0 Material Balance */}
-        <table style={{...tbl, marginBottom:'3px'}}>
-          <colgroup>
-            <col style={{width:'7%'}}/>
-            <col style={{width:'44%'}}/>
-            <col style={{width:'24%'}}/>
-            <col style={{width:'25%'}}/>
-          </colgroup>
+      <Section title="1.0 Material Balance">
+        <p style={{fontSize:12,color:'#666',marginBottom:8}}>※ 변경 항목 체크 시 <strong><em><u>굵음+기울임+밑줄</u></em></strong>로 표시됩니다.</p>
+        <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
+          <thead><tr>
+            <th style={thS}>순서</th><th style={thS}>원료명</th><th style={thS}>투입량(kg)</th>
+            <th style={thS}>비고</th><th style={thS}>변경?</th><th style={thS}>삭제</th>
+          </tr></thead>
           <tbody>
-            <tr><td colSpan={4} style={{...S.td, fontWeight:'bold', background:'#f2f2f2', padding:'3px 6px'}}>1.0 Material Balance</td></tr>
-            <tr style={{height:'18px'}}>
-              <td style={{...S.thGray}}></td>
-              <td style={{...S.thGray}}>원       료       명</td>
-              <td style={{...S.thGray}}>투   입   량 (kg)</td>
-              <td style={{...S.thGray}}>비      고</td>
-            </tr>
-            {matRows.map((row, i) => (
-              <tr key={i} style={{height: row.name ? '18px' : '13px'}}>
-                <td style={{...S.td,...S.center}}>{row.order}</td>
-                <td style={{...S.td,...S.center}}><Val value={row.name} changed={row.changed}/></td>
-                <td style={{...S.td,...S.center}}><Val value={row.amount} changed={row.changed}/></td>
-                <td style={{...S.td,...S.center}}>{row.note}</td>
-              </tr>
-            ))}
-            <tr style={{height:'18px'}}>
-              <td style={{...S.td}}></td>
-              <td style={{...S.td,...S.center, fontWeight:'bold'}}>TOTAL</td>
-              <td style={{...S.td,...S.center, fontWeight:'bold', fontStyle:'italic', textDecoration:'underline'}}>{d.totalAmount}</td>
-              <td style={{...S.td}}></td>
-            </tr>
-          </tbody>
-        </table>
-
-        {/* 2.0 제품규격 */}
-        <table style={{...tbl, marginBottom:'3px'}}>
-          <colgroup>
-            <col style={{width:'7%'}}/>
-            <col style={{width:'44%'}}/>
-            <col style={{width:'24%'}}/>
-            <col style={{width:'25%'}}/>
-          </colgroup>
-          <tbody>
-            <tr><td colSpan={4} style={{...S.td, fontWeight:'bold', background:'#f2f2f2', padding:'3px 6px'}}>2.0 제품규격</td></tr>
-            <tr style={{height:'18px'}}>
-              <td style={{...S.thGray}}></td>
-              <td style={{...S.thGray}}>항          목</td>
-              <td style={{...S.thGray}}>규          격</td>
-              <td style={{...S.thGray}}>시   험   법</td>
-            </tr>
-            {specRows.map((row, i) => (
-              <tr key={i} style={{height: row.item ? '18px' : '13px'}}>
-                <td style={{...S.td,...S.center}}>{row.order}</td>
-                <td style={{...S.td,...S.center}}>{row.item}</td>
-                <td style={{...S.td,...S.center}}><Val value={row.spec} changed={row.changed}/></td>
-                <td style={{...S.td,...S.center}}>{row.method}</td>
+            {data.materials.map((r,i)=>(
+              <tr key={i}>
+                <td style={tdS}><input style={{...inp,width:50}} value={r.order} onChange={e=>updR('materials',i,'order',e.target.value)}/></td>
+                <td style={tdS}><Inp value={r.name} onChange={e=>updR('materials',i,'name',e.target.value)}/></td>
+                <td style={tdS}><Inp value={r.amount} onChange={e=>updR('materials',i,'amount',e.target.value)}/></td>
+                <td style={tdS}><Inp value={r.note} onChange={e=>updR('materials',i,'note',e.target.value)}/></td>
+                <td style={{...tdS,textAlign:'center'}}><input type="checkbox" checked={r.changed} onChange={e=>updR('materials',i,'changed',e.target.checked)}/></td>
+                <td style={{...tdS,textAlign:'center'}}><Btn onClick={()=>delR('materials',i)} color="#ef4444">✕</Btn></td>
               </tr>
             ))}
           </tbody>
         </table>
+        <div style={{display:'flex',gap:12,marginTop:8,alignItems:'center'}}>
+          <Btn onClick={()=>addR('materials',{order:'',name:'',amount:'',note:'',changed:false})}>+ 행 추가</Btn>
+          <label style={{fontSize:13}}>TOTAL (kg): <input style={{...inp,width:120,display:'inline-block'}} value={data.totalAmount} onChange={e=>upd('totalAmount',e.target.value)}/></label>
+        </div>
+      </Section>
 
-        <table style={{...tbl}}>
-          <colgroup><col style={{width:'8%'}}/><col style={{width:'92%'}}/></colgroup>
+      <Section title="2.0 제품규격">
+        <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
+          <thead><tr>
+            <th style={thS}>순서</th><th style={thS}>항목</th><th style={thS}>규격</th>
+            <th style={thS}>시험법</th><th style={thS}>변경?</th><th style={thS}>삭제</th>
+          </tr></thead>
           <tbody>
-            <tr style={{height:'16px'}}><td style={{...S.thGray}}>개  정</td><td style={{...S.td}}>{d.revisionNote}</td></tr>
-            <tr style={{height:'16px'}}><td style={{...S.thGray}}>배포처</td><td style={{...S.td}}>{d.distributionMfg}</td></tr>
-          </tbody>
-        </table>
-        <div style={{fontSize:'7pt', marginTop:'3px', fontFamily:"'맑은 고딕','Malgun Gothic',sans-serif", color:'#444'}}>FB01-06(1)</div>
-        <div style={{textAlign:'center', fontSize:'9pt', fontWeight:'bold', fontFamily:"'맑은 고딕','Malgun Gothic',sans-serif", marginTop:'4px'}}>그린케미칼(주)</div>
-      </div>
-
-      {/* ══ PAGE 2/4 ══ */}
-      <div className="print-page" style={pageStyle}>
-        <SubHeader page="2" />
-        <table style={{...tbl}}>
-          <colgroup><col style={{width:'21%'}}/><col style={{width:'79%'}}/></colgroup>
-          <tbody>
-            <tr><td colSpan={2} style={{...S.td, fontWeight:'bold', background:'#f2f2f2', padding:'3px 6px'}}>3.0 작업개요</td></tr>
-            <tr style={{height:'18px'}}>
-              <td style={{...S.thGray}}>FLOW SHEET</td>
-              <td style={{...S.thGray}}>제    조    조    건</td>
-            </tr>
-            <tr>
-              <td style={{...S.td, verticalAlign:'top', textAlign:'center', fontSize:'8pt', lineHeight:'2.0', padding:'6px 4px', whiteSpace:'pre-line'}}>
-{`${fc.starter||'Starter'}  ${fc.catalyst||'촉매'}
-↓
-1  원료사입
-
-↓
-2  치   환
-
-↓
-3  승   온
-${fc.reactant||'Reactant'}
-↓
-4  반   응
-
-↓
-5  숙    성`}
-              </td>
-              <td style={{...S.td, verticalAlign:'top', fontSize:'8.5pt', lineHeight:'1.8', padding:'8px', whiteSpace:'pre-line'}}>
-{`<준 비> : 사용할 중합조가 충분히 세척, 건조되어 있는가를 확인한다.
-
-1. 원료사입
-    지시량의 ${fc.starter||'Starter'}, ${fc.catalyst||'촉매'}를 사입한 후 교반을 실시한다.
-
-2. 치   환
-    0 kg/cm²G  ↔  -1 kg/cm²G 로 질소감압치환을 3회 실시한 후 최종압력은  -1.0 kg/cm²G 로 한다
-
-3. 승  온
-    반응온도까지 승온한다.(${fc.reactionTemp||140}℃)
-
-4. 반   응
-    아래의 조건으로 ${fc.reactant||'Reactant'} 반응을 실시한다.
-    * 반응온도 : ${fc.reactionTemp||140} ± 5℃
-    * 반응압력 : ${fc.reactionPressure||4} kg/cm²G 이하
-    * 반응시간 : 지시량의 ${fc.reactant||'Reactant'} 사입 종료까지
-
-5. 숙   성
-    지시량의 ${fc.reactant||'Reactant'} 사입이 종료되면 아래의 조건에서 숙성을 실시한다.
-    * 숙성온도 : ${fc.agingTemp||140} ± 5℃
-    * 숙성압력 : ${fc.agingPressure||4} kg/cm²G 이하
-    * 숙성시간 : 동일온도에서 압력평형상태가 30분간 지속될 때 까지`}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        <div style={{fontSize:'7pt', marginTop:'3px', fontFamily:"'맑은 고딕','Malgun Gothic',sans-serif", color:'#444'}}>FB01-06(1)</div>
-        <div style={{textAlign:'center', fontSize:'9pt', fontWeight:'bold', fontFamily:"'맑은 고딕','Malgun Gothic',sans-serif", marginTop:'4px'}}>그린케미칼(주)</div>
-      </div>
-
-      {/* ══ PAGE 3/4 ══ */}
-      <div className="print-page" style={pageStyle}>
-        <SubHeader page="3" />
-        <table style={{...tbl}}>
-          <colgroup><col style={{width:'21%'}}/><col style={{width:'79%'}}/></colgroup>
-          <tbody>
-            <tr><td colSpan={2} style={{...S.td, fontWeight:'bold', background:'#f2f2f2', padding:'3px 6px'}}>3.0 작업개요</td></tr>
-            <tr style={{height:'18px'}}>
-              <td style={{...S.thGray}}>FLOW SHEET</td>
-              <td style={{...S.thGray}}>제    조    조    건</td>
-            </tr>
-            <tr>
-              <td style={{...S.td, verticalAlign:'top', textAlign:'center', fontSize:'8pt', lineHeight:'2.0', padding:'6px 4px', whiteSpace:'pre-line'}}>
-{`6  분   석
-
-↓
-7  냉   각
-
-↓
-8  탈   취
-
-↓
-9  포  장`}
-              </td>
-              <td style={{...S.td, verticalAlign:'top', fontSize:'8.5pt', lineHeight:'1.8', padding:'8px', whiteSpace:'pre-line'}}>
-{`6. 분   석
-    숙성이 종료되면 다음 항목을 분석한다.
-${specForAnalysis.length > 0
-  ? specForAnalysis.map(s=>`       ${s.item.trim().replace(/\s+/,' ')}    : ${s.spec}`).join('\n')
-  : `       외     관    : 투명균일액상
-       색     상    : 
-       수  분(%)    : 
-       평균분자량   : `}
-
-7. 냉   각
-    분석치가 규격내인 것을 확인한 후 탈취온도까지 냉각한다.
-
-8. 탈   취
-    탈취온도(${fc.deodorTemp||80}±5℃)에서 30분간 질소로 탈취한다.
-
-9. 포  장
-    본 제품은 Be품이므로 제품의 변질을 방지하기 위하여 질소를 충진하여
-    포장한다.(포장온도 : ${fc.packingTemp||60}℃ 이하)`}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        <div style={{fontSize:'7pt', marginTop:'3px', fontFamily:"'맑은 고딕','Malgun Gothic',sans-serif", color:'#444'}}>FB01-06(1)</div>
-        <div style={{textAlign:'center', fontSize:'9pt', fontWeight:'bold', fontFamily:"'맑은 고딕','Malgun Gothic',sans-serif", marginTop:'4px'}}>그린케미칼(주)</div>
-      </div>
-
-      {/* ══ PAGE 4/4 ══ */}
-      <div className="print-page" style={pageStyle}>
-        <SubHeader page="4" />
-        <table style={{...tbl}}>
-          <tbody>
-            <tr>
-              <td style={{...S.td, lineHeight:'1.9', padding:'8px 10px', whiteSpace:'pre-line', fontSize:'8.5pt'}}>
-{`4.0 제조기계
-    ${fc.reactorNo||'V-302'} Reactor Type
-
-5.0 유해물질명
-    ${fc.hazardous||'해당없음'}
-
-6.0 포장용기
-    ${fc.packageType||'Steel Drum (Net.Wt. : 230 kg)'}
-
-7.0 저장, 보존, 취급, 폐기에 관한 사항
-  7.1 저장 및 보존
-      ${fc.storage||''}
-  7.2 취  급
-      ${fc.handling||''}
-  7.3 폐  기
-      ${fc.disposal||''}`}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        <div style={{fontSize:'7pt', marginTop:'3px', fontFamily:"'맑은 고딕','Malgun Gothic',sans-serif", color:'#444'}}>FB01-06(1)</div>
-        <div style={{textAlign:'center', fontSize:'9pt', fontWeight:'bold', fontFamily:"'맑은 고딕','Malgun Gothic',sans-serif", marginTop:'4px'}}>그린케미칼(주)</div>
-      </div>
-
-      {/* ══ PAGE 5 : 제품보증규격 ══ */}
-      <div className="print-page" style={pageStyle}>
-        <div style={{textAlign:'right', fontSize:'9pt', fontWeight:'bold', fontFamily:"'맑은 고딕','Malgun Gothic',sans-serif", marginBottom:'2px'}}>그린케미칼(주)</div>
-        <table style={{...tbl, marginBottom:'3px'}}>
-          <colgroup>
-            <col style={{width:'13%'}}/>
-            <col style={{width:'30%'}}/>
-            <col style={{width:'7%'}}/>
-            <col style={{width:'12%'}}/>
-            <col style={{width:'7%'}}/>
-            <col style={{width:'12%'}}/>
-            <col style={{width:'7%'}}/>
-            <col style={{width:'12%'}}/>
-          </colgroup>
-          <tbody>
-            <tr style={{height:'20px'}}>
-              <td style={{...S.thGray}}>문 서 번 호</td>
-              <td style={{...S.thGray}}>제품규격 (Be품)</td>
-              <td style={{...S.thGray}}>작성</td>
-              <td style={{...S.td,...S.center}}></td>
-              <td style={{...S.thGray}}>검토</td>
-              <td style={{...S.td,...S.center}}></td>
-              <td style={{...S.thGray}}>승인</td>
-              <td style={{...S.td,...S.center}}></td>
-            </tr>
-            <tr style={{height:'18px'}}>
-              <td style={{...S.td,...S.center, fontSize:'7.5pt'}}>{d.docNo?.replace('R41','R32')}</td>
-              <td style={{...S.td,...S.center, fontWeight:'bold'}}>{d.productName}</td>
-              <td style={{...S.td,...S.center, fontSize:'7.5pt'}}>작성</td>
-              <td style={{...S.td,...S.center, fontSize:'7.5pt'}}>/ {d.drafter}</td>
-              <td style={{...S.td,...S.center, fontSize:'7.5pt'}}>검토</td>
-              <td style={{...S.td,...S.center, fontSize:'7.5pt'}}>/ {d.reviewer}</td>
-              <td style={{...S.td,...S.center, fontSize:'7.5pt'}}>승인</td>
-              <td style={{...S.td,...S.center, fontSize:'7.5pt'}}>/ {d.approver}</td>
-            </tr>
-            <tr style={{height:'15px'}}>
-              <td style={{...S.thGray, fontSize:'7.5pt'}}>제정일자</td>
-              <td style={{...S.td,...S.center, fontSize:'7.5pt'}}>{d.establishDate}</td>
-              <td style={{...S.thGray, fontSize:'7.5pt'}}>개정일자</td>
-              <td colSpan={2} style={{...S.td,...S.center, fontSize:'7.5pt'}}>{d.revisionDate}</td>
-              <td style={{...S.thGray, fontSize:'7.5pt'}}>개정번호</td>
-              <td style={{...S.td,...S.center, fontSize:'7.5pt'}}>{d.revisionNo}</td>
-              <td style={{...S.td,...S.center, fontSize:'7.5pt'}}>1/1</td>
-            </tr>
-          </tbody>
-        </table>
-
-        <table style={{...tbl, marginBottom:'3px'}}>
-          <colgroup>
-            <col style={{width:'22%'}}/>
-            <col style={{width:'11%'}}/>
-            <col style={{width:'17%'}}/>
-            <col style={{width:'17%'}}/>
-            <col style={{width:'17%'}}/>
-            <col style={{width:'16%'}}/>
-          </colgroup>
-          <tbody>
-            <tr style={{height:'18px'}}>
-              <td style={{...S.thGray}}>공  정  도</td>
-              <td style={{...S.thGray}}>분 석 점</td>
-              <td style={{...S.thGray}}>분 석 항 목</td>
-              <td style={{...S.thGray}}>분 석 법</td>
-              <td style={{...S.thGray}}>규    격</td>
-              <td style={{...S.thGray}}>비    고</td>
-            </tr>
-            <tr>
-              <td style={{...S.td, verticalAlign:'middle', textAlign:'center', fontSize:'8pt', lineHeight:'2', padding:'6px 4px', whiteSpace:'pre-line'}}>
-{`1  원료사입
-2  치    환
-3  승    온
-4  반    응
-5  숙    성
-6  분    석
-7  냉    각
-8  탈    취
-9  포    장`}
-              </td>
-              <td style={{...S.td,...S.center, fontWeight:'bold', fontSize:'11pt'}}>6</td>
-              <td style={{...S.td, verticalAlign:'top', lineHeight:'2', padding:'4px'}}>
-                {(d.specs||[]).filter(s=>s.item).map((s,i)=><div key={i}>{s.item}</div>)}
-              </td>
-              <td style={{...S.td, verticalAlign:'top', lineHeight:'2', padding:'4px'}}>
-                {(d.specs||[]).filter(s=>s.method).map((s,i)=><div key={i}>{s.method}</div>)}
-              </td>
-              <td style={{...S.td, verticalAlign:'top', lineHeight:'2', padding:'4px'}}>
-                {(d.specs||[]).filter(s=>s.spec).map((s,i)=>(
-                  <div key={i}><Val value={s.spec} changed={s.changed}/></div>
-                ))}
-              </td>
-              <td style={{...S.td}}></td>
-            </tr>
-          </tbody>
-        </table>
-        <table style={{...tbl}}>
-          <colgroup><col style={{width:'10%'}}/><col style={{width:'90%'}}/></colgroup>
-          <tbody>
-            <tr style={{height:'16px'}}><td style={{...S.thGray}}>개  정</td><td style={{...S.td}}>{d.revisionNote}</td></tr>
-            <tr style={{height:'16px'}}><td style={{...S.thGray}}>배포처</td><td style={{...S.td}}>{d.distributionQuality}</td></tr>
-          </tbody>
-        </table>
-        <div style={{fontSize:'7pt', marginTop:'3px', fontFamily:"'맑은 고딕','Malgun Gothic',sans-serif", color:'#444'}}>FB01-07(1)</div>
-        <div style={{textAlign:'center', fontSize:'9pt', fontWeight:'bold', fontFamily:"'맑은 고딕','Malgun Gothic',sans-serif", marginTop:'4px'}}>그린케미칼(주)</div>
-      </div>
-
-      {/* ══ PAGE 6 : 품질보증규격 ══ */}
-      <div className="print-page" style={pageStyle}>
-        <div style={{textAlign:'right', fontSize:'9pt', fontWeight:'bold', fontFamily:"'맑은 고딕','Malgun Gothic',sans-serif", marginBottom:'2px'}}>그린케미칼(주)</div>
-        <table style={{...tbl, marginBottom:'3px'}}>
-          <colgroup>
-            <col style={{width:'14%'}}/>
-            <col style={{width:'30%'}}/>
-            <col style={{width:'7%'}}/>
-            <col style={{width:'12%'}}/>
-            <col style={{width:'7%'}}/>
-            <col style={{width:'12%'}}/>
-            <col style={{width:'7%'}}/>
-            <col style={{width:'11%'}}/>
-          </colgroup>
-          <tbody>
-            <tr style={{height:'20px'}}>
-              <td style={{...S.thGray}}>문 서 번 호</td>
-              <td style={{...S.thGray}}>품질보증규격</td>
-              <td style={{...S.thGray}}>작성</td>
-              <td style={{...S.td,...S.center}}></td>
-              <td style={{...S.thGray}}>검토</td>
-              <td style={{...S.td,...S.center}}></td>
-              <td style={{...S.thGray}}>승인</td>
-              <td style={{...S.td,...S.center}}></td>
-            </tr>
-            <tr style={{height:'18px'}}>
-              <td style={{...S.td,...S.center, fontSize:'7.5pt'}}>{d.qaDocNo}</td>
-              <td style={{...S.td,...S.center, fontWeight:'bold'}}>KONION {d.productName}</td>
-              <td style={{...S.td,...S.center, fontSize:'7.5pt'}}>작성</td>
-              <td style={{...S.td,...S.center, fontSize:'7.5pt'}}>/ {d.drafter}</td>
-              <td style={{...S.td,...S.center, fontSize:'7.5pt'}}>검토</td>
-              <td style={{...S.td,...S.center, fontSize:'7.5pt'}}>/ {d.reviewer}</td>
-              <td style={{...S.td,...S.center, fontSize:'7.5pt'}}>승인</td>
-              <td style={{...S.td,...S.center, fontSize:'7.5pt'}}>/ {d.approver}</td>
-            </tr>
-            <tr style={{height:'15px'}}>
-              <td style={{...S.thGray, fontSize:'7.5pt'}}>제정일자</td>
-              <td style={{...S.td,...S.center, fontSize:'7.5pt'}}>{d.establishDate}</td>
-              <td style={{...S.thGray, fontSize:'7.5pt'}}>개정일자</td>
-              <td colSpan={2} style={{...S.td,...S.center, fontSize:'7.5pt'}}>{d.qaRevisionDate||d.revisionDate}</td>
-              <td style={{...S.thGray, fontSize:'7.5pt'}}>개정번호</td>
-              <td style={{...S.td,...S.center, fontSize:'7.5pt'}}>{d.qaRevisionNo||d.revisionNo}</td>
-              <td style={{...S.td,...S.center, fontSize:'7.5pt'}}>1/1</td>
-            </tr>
-          </tbody>
-        </table>
-
-        <table style={{...tbl, marginBottom:'3px'}}>
-          <colgroup>
-            <col style={{width:'25%'}}/>
-            <col style={{width:'75%'}}/>
-          </colgroup>
-          <tbody>
-            <tr style={{height:'18px'}}>
-              <td style={{...S.thGray}}>구 분 / 분석항목</td>
-              <td style={{...S.thGray,...S.center}}>{d.productName}</td>
-            </tr>
-            {(d.qaSpecs||[]).map((row,i)=>(
-              <tr key={i} style={{height:'18px'}}>
-                <td style={{...S.td,...S.center}}>{row.item}</td>
-                <td style={{...S.td,...S.center}}><Val value={row.spec} changed={row.changed}/></td>
+            {data.specs.map((r,i)=>(
+              <tr key={i}>
+                <td style={tdS}><input style={{...inp,width:50}} value={r.order} onChange={e=>updR('specs',i,'order',e.target.value)}/></td>
+                <td style={tdS}><Inp value={r.item} onChange={e=>updR('specs',i,'item',e.target.value)}/></td>
+                <td style={tdS}><Inp value={r.spec} onChange={e=>updR('specs',i,'spec',e.target.value)}/></td>
+                <td style={tdS}><Inp value={r.method} onChange={e=>updR('specs',i,'method',e.target.value)}/></td>
+                <td style={{...tdS,textAlign:'center'}}><input type="checkbox" checked={r.changed} onChange={e=>updR('specs',i,'changed',e.target.checked)}/></td>
+                <td style={{...tdS,textAlign:'center'}}><Btn onClick={()=>delR('specs',i)} color="#ef4444">✕</Btn></td>
               </tr>
             ))}
           </tbody>
         </table>
+        <Btn onClick={()=>addR('specs',{order:'',item:'',spec:'',method:'',changed:false})} style={{marginTop:8}}>+ 행 추가</Btn>
+      </Section>
 
-        <table style={{...tbl, marginBottom:'3px'}}>
-          <tbody>
-            <tr>
-              <td style={{...S.td, padding:'6px 8px', fontSize:'8.5pt'}}>
-                <div style={{fontWeight:'bold'}}>특기사항</div>
-                <div>* 제품보존기간 : {d.qaPreservation||'2 년'}</div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-        <table style={{...tbl}}>
-          <colgroup><col style={{width:'13%'}}/><col style={{width:'87%'}}/></colgroup>
-          <tbody>
-            <tr style={{height:'16px'}}>
-              <td style={{...S.thGray}}>배 포 처</td>
-              <td style={{...S.td}}>{d.qaDistribution}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <Section title="3.0 작업개요 — 제조 조건">
+        <Grid cols={2}>
+          <Field label="개시제 (Starter)"><Inp value={data.flowConditions.starter} onChange={e=>updN('flowConditions','starter',e.target.value)}/></Field>
+          <Field label="촉매"><Inp value={data.flowConditions.catalyst} onChange={e=>updN('flowConditions','catalyst',e.target.value)}/></Field>
+          <Field label="반응물 (Reactant)"><Inp value={data.flowConditions.reactant} onChange={e=>updN('flowConditions','reactant',e.target.value)}/></Field>
+          <Field label="반응온도 (℃)"><Inp value={data.flowConditions.reactionTemp} onChange={e=>updN('flowConditions','reactionTemp',e.target.value)}/></Field>
+          <Field label="반응압력 (kg/cm²G 이하)"><Inp value={data.flowConditions.reactionPressure} onChange={e=>updN('flowConditions','reactionPressure',e.target.value)}/></Field>
+          <Field label="숙성온도 (℃)"><Inp value={data.flowConditions.agingTemp} onChange={e=>updN('flowConditions','agingTemp',e.target.value)}/></Field>
+          <Field label="숙성압력 (kg/cm²G 이하)"><Inp value={data.flowConditions.agingPressure} onChange={e=>updN('flowConditions','agingPressure',e.target.value)}/></Field>
+          <Field label="탈취온도 (℃)"><Inp value={data.flowConditions.deodorTemp} onChange={e=>updN('flowConditions','deodorTemp',e.target.value)}/></Field>
+          <Field label="포장온도 상한 (℃)"><Inp value={data.flowConditions.packingTemp} onChange={e=>updN('flowConditions','packingTemp',e.target.value)}/></Field>
+        </Grid>
+      </Section>
+
+      <Section title="4.0 ~ 7.0 제조기계 / 유해물질 / 포장 / 저장">
+        <Grid cols={2}>
+          <Field label="제조기계 (Reactor No.)"><Inp value={data.flowConditions.reactorNo} onChange={e=>updN('flowConditions','reactorNo',e.target.value)}/></Field>
+          <Field label="유해물질명"><Inp value={data.flowConditions.hazardous} onChange={e=>updN('flowConditions','hazardous',e.target.value)}/></Field>
+          <Field label="포장용기"><Inp value={data.flowConditions.packageType} onChange={e=>updN('flowConditions','packageType',e.target.value)}/></Field>
+        </Grid>
+        <div style={{marginTop:10}}><Field label="7.1 저장 및 보존"><textarea style={{...inp,resize:'vertical'}} rows={2} value={data.flowConditions.storage} onChange={e=>updN('flowConditions','storage',e.target.value)}/></Field></div>
+        <div style={{marginTop:10}}><Field label="7.2 취급"><textarea style={{...inp,resize:'vertical'}} rows={2} value={data.flowConditions.handling} onChange={e=>updN('flowConditions','handling',e.target.value)}/></Field></div>
+        <div style={{marginTop:10}}><Field label="7.3 폐기"><Inp value={data.flowConditions.disposal} onChange={e=>updN('flowConditions','disposal',e.target.value)}/></Field></div>
+      </Section>
+
+      <Section title="개정 내용 / 배포처">
+        <Grid cols={3}>
+          <Field label="개정 내용"><Inp value={data.revisionNote} onChange={e=>upd('revisionNote',e.target.value)}/></Field>
+          <Field label="배포처 (제조법)"><Inp value={data.distributionMfg} onChange={e=>upd('distributionMfg',e.target.value)}/></Field>
+          <Field label="배포처 (제품보증규격)"><Inp value={data.distributionQuality} onChange={e=>upd('distributionQuality',e.target.value)}/></Field>
+        </Grid>
+      </Section>
+
+      <Section title="품질보증규격 (별도 문서)">
+        <Grid cols={3}>
+          <Field label="문서번호 (품질보증)"><Inp value={data.qaDocNo} onChange={e=>upd('qaDocNo',e.target.value)}/></Field>
+          <Field label="개정일자"><Inp value={data.qaRevisionDate} onChange={e=>upd('qaRevisionDate',e.target.value)}/></Field>
+          <Field label="개정번호"><Inp value={data.qaRevisionNo} onChange={e=>upd('qaRevisionNo',e.target.value)}/></Field>
+        </Grid>
+        <div style={{marginTop:12}}>
+          <table style={{width:'100%',borderCollapse:'collapse',fontSize:13}}>
+            <thead><tr>
+              <th style={thS}>항목</th><th style={thS}>규격</th><th style={thS}>변경?</th>
+            </tr></thead>
+            <tbody>
+              {data.qaSpecs.map((r,i)=>(
+                <tr key={i}>
+                  <td style={tdS}><Inp value={r.item} onChange={e=>updR('qaSpecs',i,'item',e.target.value)}/></td>
+                  <td style={tdS}><Inp value={r.spec} onChange={e=>updR('qaSpecs',i,'spec',e.target.value)}/></td>
+                  <td style={{...tdS,textAlign:'center'}}><input type="checkbox" checked={r.changed} onChange={e=>updR('qaSpecs',i,'changed',e.target.checked)}/></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div style={{marginTop:8}}><Btn onClick={()=>addR('qaSpecs',{item:'',spec:'',changed:false})}>+ 행 추가</Btn></div>
+        </div>
+        <div style={{marginTop:12}}>
+          <Grid cols={3}>
+            <Field label="제품보존기간"><Inp value={data.qaPreservation} onChange={e=>upd('qaPreservation',e.target.value)}/></Field>
+            <Field label="배포처 (품질보증)"><Inp value={data.qaDistribution} onChange={e=>upd('qaDistribution',e.target.value)}/></Field>
+            <Field label="개정 내용 (품질보증)"><Inp value={data.qaRevisionNote} onChange={e=>upd('qaRevisionNote',e.target.value)}/></Field>
+          </Grid>
+        </div>
+      </Section>
+
     </div>
   );
 }
