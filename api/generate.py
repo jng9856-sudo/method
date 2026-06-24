@@ -1,7 +1,7 @@
 from http.server import BaseHTTPRequestHandler
 import json, io, base64, zipfile, re, copy, os, shutil, tempfile
 
-TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), '..', 'public', 'template.docx')
+TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), 'template.docx')
 
 def replace_text_at_index(content, target_text, new_text, occurrence=0):
     """XML에서 특정 텍스트를 새 텍스트로 교체 (n번째 발생)"""
