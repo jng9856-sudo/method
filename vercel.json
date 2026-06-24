@@ -1,1 +1,11 @@
-{}
+{
+  "functions": {
+    "api/generate.py": {
+      "runtime": "python3.9"
+    }
+  },
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api/$1" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
