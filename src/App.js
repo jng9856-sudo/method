@@ -121,6 +121,30 @@ export default function App() {
     setTimeout(() => setSaveMsg(''), 3000);
   };
 
+  const handleDownloadDocx = async () => {
+    try {
+      const res = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData),
+      });
+      const json = await res.json();
+      if (json.error) { alert('오류: ' + json.error); return; }
+      const bytes = atob(json.file);
+      const arr = new Uint8Array(bytes.length);
+      for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+      const blob = new Blob([arr], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${formData.productName || '제조법'}_제조법.docx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch(e) {
+      alert('다운로드 실패: ' + e.message);
+    }
+  };
+
   const handlePrint = () => {
     setActiveTab('preview');
     setTimeout(() => window.print(), 400);
@@ -183,6 +207,11 @@ export default function App() {
             padding: '8px 18px', background: '#1a3a5c', color: 'white',
             border: 'none', borderRadius: 6, fontWeight: 700, fontSize: 13, cursor: 'pointer'
           }}>{saving ? '저장 중...' : '💾 저장'}</button>
+
+          <button onClick={handleDownloadDocx} style={{
+            padding: '8px 18px', background: '#7c3aed', color: 'white',
+            border: 'none', borderRadius: 6, fontWeight: 700, fontSize: 13, cursor: 'pointer'
+          }}>📥 워드 다운로드</button>
 
           <button onClick={handlePrint} style={{
             padding: '8px 18px', background: '#059669', color: 'white',
