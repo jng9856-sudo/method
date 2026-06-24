@@ -116,6 +116,118 @@ def modify_docx(data):
             if total and total != '1000.76':
                 content = replace_all(content, '1000.76', total)
             
+            # ── 공정 조건 교체 ──
+            starter = fc.get('starter', 'EG')
+            catalyst = fc.get('catalyst', 'KOH(96%)')
+            reactant = fc.get('reactant', 'EO')
+            react_temp = fc.get('reactionTemp', '140')
+            react_pres = fc.get('reactionPressure', '4')
+            aging_temp = fc.get('agingTemp', '140')
+            aging_pres = fc.get('agingPressure', '4')
+            deodor_temp = fc.get('deodorTemp', '80')
+            packing_temp = fc.get('packingTemp', '60')
+            reactor_no = fc.get('reactorNo', 'V-302')
+            hazardous = fc.get('hazardous', '해당없음')
+            pkg_type = fc.get('packageType', 'Steel Drum (Net.Wt. : 230 kg)')
+            storage = fc.get('storage', '')
+            handling = fc.get('handling', '')
+            disposal = fc.get('disposal', '')
+
+            # Flow sheet: EG, KOH(96%) 라벨
+            content = content.replace('>EG    KOH(96%)<', f'>{starter}    {catalyst}<')
+            content = content.replace('>EG<', f'>{starter}<')
+            content = content.replace('>    KOH(96%)<', f'>    {catalyst}<')
+            content = content.replace('>, KOH(96%)를 <', f'>, {catalyst}를 <')
+            
+            # EO → reactant 교체 (여러 곳)
+            content = content.replace('>EO<', f'>{reactant}<')
+            
+            # 반응온도 승온 텍스트
+            content = content.replace(
+                '>    반응온도까지 승온한다.(140<',
+                f'>    반응온도까지 승온한다.({react_temp}<'
+            )
+            # 반응온도 조건
+            content = content.replace(
+                '>     * 반응온도 : 140 ± 5<',
+                f'>     * 반응온도 : {react_temp} ± 5<'
+            )
+            # 반응압력
+            content = content.replace(
+                '>     * 반응압력 : 4 kg/cm<',
+                f'>     * 반응압력 : {react_pres} kg/cm<'
+            )
+            # 반응시간 (EO 포함)
+            content = content.replace(
+                '>     * 반응시간 : 지시량의 EO 사입 종료까지<',
+                f'>     * 반응시간 : 지시량의 {reactant} 사입 종료까지<'
+            )
+            # 숙성 - EO 사입이 종료
+            content = content.replace(
+                '>    지시량의 EO 사입이 종료되면 아래의 조건에서 숙성을 실시한다.<',
+                f'>    지시량의 {reactant} 사입이 종료되면 아래의 조건에서 숙성을 실시한다.<'
+            )
+            # 숙성온도
+            content = content.replace(
+                '>     * 숙성온도 : 140 ± 5<',
+                f'>     * 숙성온도 : {aging_temp} ± 5<'
+            )
+            # 숙성압력
+            content = content.replace(
+                '>     * 숙성압력 : 4 kg/cm<',
+                f'>     * 숙성압력 : {aging_pres} kg/cm<'
+            )
+            # 탈취온도
+            content = content.replace(
+                '탈취온도(80±5℃)에서',
+                f'탈취온도({deodor_temp}±5℃)에서'
+            )
+            # 포장온도
+            content = content.replace(
+                '>: 60℃ 이하<',
+                f'>: {packing_temp}℃ 이하<'
+            )
+            # 4.0 제조기계
+            content = content.replace(
+                '>    V-302 Reactor Type<',
+                f'>    {reactor_no} Reactor Type<'
+            )
+            # 5.0 유해물질
+            content = content.replace(
+                '>    해당없음<',
+                f'>    {hazardous}<'
+            )
+            # 6.0 포장용기
+            content = content.replace(
+                '>    Steel Drum (Net.Wt. : 230 kg)<',
+                f'>    {pkg_type}<'
+            )
+            # 7.1 저장
+            if storage:
+                # 저장 텍스트가 run으로 쪼개져 있음: "옥내외에...생산일로부터 " + "1" + "년으로 하며..."
+                import re as _re
+                storage_pattern = r'(옥내외에 저장하고 보존기간은 생산일로부터 )</w:t></w:r>.*?<w:t>1</w:t></w:r>.*?<w:t>(년으로 하며, 선입선출을 원칙으로 한다.)</w:t>'
+                if _re.search(storage_pattern, content, _re.DOTALL):
+                    content = _re.sub(
+                        storage_pattern,
+                        storage + '</w:t>',
+                        content, count=1, flags=_re.DOTALL
+                    )
+                else:
+                    content = content.replace('옥내외에 저장하고 보존기간은 생산일로부터 ', storage)
+            # 7.2 취급
+            if handling:
+                content = content.replace(
+                    '     피부나 눈에 접촉시 약간의 자극을 줄 수 있으므로 보호구 및 안전장갑을 착용, 취급한다.',
+                    f'     {handling}'
+                )
+            # 7.3 폐기
+            if disposal:
+                content = content.replace(
+                    '     폐기물관리법 제 25 조에 준한다.',
+                    f'     {disposal}'
+                )
+
             # ── 제품규격 교체 ──
             # 색상: '20 이하' -> 새 값
             # 수분: '0' + '.1 이하' 패턴
