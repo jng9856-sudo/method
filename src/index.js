@@ -37,7 +37,6 @@ const defaultData = {
     reactionPressure: '4',
     agingTemp: '140',
     agingPressure: '4',
-    specItems: '',
     deodorTemp: '80',
     packingTemp: '60',
     reactorNo: 'V-302',
@@ -67,7 +66,7 @@ const defaultData = {
 export default function App() {
   const [formData, setFormData] = useState(defaultData);
   const [selectedId, setSelectedId] = useState(null);
-  const [activeTab, setActiveTab] = useState('form'); // 'form' | 'preview'
+  const [activeTab, setActiveTab] = useState('form');
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
   const printRef = useRef();
@@ -118,26 +117,27 @@ export default function App() {
       if (!error && res.data) setSelectedId(res.data.id);
     }
     setSaving(false);
-    setSaveMsg(error ? '❌ 저장 실패: ' + error.message : '✅ 저장되었습니다!');
+    setSaveMsg(error ? '저장 실패: ' + error.message : '저장되었습니다!');
     setTimeout(() => setSaveMsg(''), 3000);
   };
 
   const handlePrint = () => {
     setActiveTab('preview');
-    setTimeout(() => window.print(), 300);
+    setTimeout(() => window.print(), 400);
   };
 
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
 
-      {/* ── 사이드바 (문서 목록) ── */}
+      {/* 사이드바 */}
       <div className="no-print" style={{
         width: 220, minWidth: 220, background: 'white',
-        borderRight: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column',
+        borderRight: '1px solid #e2e8f0',
+        display: 'flex', flexDirection: 'column',
         boxShadow: '2px 0 6px rgba(0,0,0,0.06)'
       }}>
         <div style={{ padding: '14px 12px', background: '#1a3a5c', color: 'white' }}>
-          <div style={{ fontWeight: 800, fontSize: 13, letterSpacing: 0.5 }}>🧪 그린케미칼</div>
+          <div style={{ fontWeight: 800, fontSize: 13 }}>그린케미칼</div>
           <div style={{ fontSize: 11, opacity: 0.75, marginTop: 2 }}>제조법 관리 시스템</div>
         </div>
         <div style={{ flex: 1, overflow: 'hidden' }}>
@@ -145,27 +145,39 @@ export default function App() {
         </div>
       </div>
 
-      {/* ── 메인 영역 ── */}
+      {/* 메인 영역 */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
-        {/* 상단 툴바 */}
+        {/* 툴바 */}
         <div className="no-print" style={{
           display: 'flex', alignItems: 'center', gap: 8,
           padding: '10px 20px', background: 'white',
-          borderBottom: '1px solid #e2e8f0', boxShadow: '0 1px 4px rgba(0,0,0,0.06)'
+          borderBottom: '1px solid #e2e8f0',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.06)'
         }}>
           <div style={{ fontWeight: 700, fontSize: 15, color: '#1a3a5c', marginRight: 8 }}>
-            {formData.productName || '새 문서'} 
-            {selectedId && <span style={{ fontSize: 11, fontWeight: 400, color: '#888', marginLeft: 6 }}>(저장됨)</span>}
+            {formData.productName || '새 문서'}
           </div>
 
-          {/* 탭 */}
-          <TabBtn active={activeTab === 'form'} onClick={() => setActiveTab('form')}>✏️ 입력</TabBtn>
-          <TabBtn active={activeTab === 'preview'} onClick={() => setActiveTab('preview')}>👁 미리보기</TabBtn>
+          <button onClick={() => setActiveTab('form')} style={{
+            padding: '6px 16px', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600,
+            background: activeTab === 'form' ? '#dbeafe' : '#f1f5f9',
+            color: activeTab === 'form' ? '#1d4ed8' : '#64748b',
+          }}>✏️ 입력</button>
+
+          <button onClick={() => setActiveTab('preview')} style={{
+            padding: '6px 16px', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600,
+            background: activeTab === 'preview' ? '#dbeafe' : '#f1f5f9',
+            color: activeTab === 'preview' ? '#1d4ed8' : '#64748b',
+          }}>👁 미리보기</button>
 
           <div style={{ flex: 1 }} />
 
-          {saveMsg && <span style={{ fontSize: 13, color: saveMsg.startsWith('✅') ? '#16a34a' : '#dc2626' }}>{saveMsg}</span>}
+          {saveMsg && (
+            <span style={{ fontSize: 13, color: saveMsg.includes('실패') ? '#dc2626' : '#16a34a' }}>
+              {saveMsg}
+            </span>
+          )}
 
           <button onClick={handleSave} disabled={saving} style={{
             padding: '8px 18px', background: '#1a3a5c', color: 'white',
@@ -178,7 +190,7 @@ export default function App() {
           }}>🖨 인쇄</button>
         </div>
 
-        {/* 콘텐츠 영역 */}
+        {/* 콘텐츠 */}
         <div style={{ flex: 1, overflowY: 'auto', padding: activeTab === 'form' ? '20px 24px' : '20px 0' }}>
           {activeTab === 'form' ? (
             <ManufacturingForm initialData={formData} onDataChange={handleDataChange} />
@@ -189,24 +201,13 @@ export default function App() {
           )}
         </div>
 
-        {/* 미리보기 탭에서도 print-area 유지 (hidden) */}
+        {/* 인쇄용 숨김 영역 */}
         {activeTab === 'form' && (
-          <div style={{ position: 'absolute', left: -9999, top: 0 }} id="hidden-print" ref={printRef}>
+          <div style={{ position: 'absolute', left: -9999, top: 0 }}>
             <PrintPreview data={formData} />
           </div>
         )}
       </div>
     </div>
-  );
-}
-
-function TabBtn({ active, onClick, children }) {
-  return (
-    <button onClick={onClick} style={{
-      padding: '6px 16px', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13, fontWeight: 600,
-      background: active ? '#dbeafe' : '#f1f5f9',
-      color: active ? '#1d4ed8' : '#64748b',
-      outline: active ? '2px solid #3b82f6' : 'none',
-    }}>{children}</button>
   );
 }
