@@ -1,7 +1,7 @@
 import {
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
   WidthType, BorderStyle, ShadingType, VerticalAlign, AlignmentType,
-  PageBreak, PageOrientation
+  PageBreak
 } from 'docx';
 import { saveAs } from 'file-saver';
 
@@ -9,9 +9,6 @@ const GRAY = 'D9D9D9';
 const BLACK = '000000';
 const border = { style: BorderStyle.SINGLE, size: 4, color: BLACK };
 const borders = { top: border, bottom: border, left: border, right: border };
-const noBorder = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' };
-const noBorders = { top: noBorder, bottom: noBorder, left: noBorder, right: noBorder };
-
 const FONT = '맑은 고딕';
 const PAGE_W = 11906; // A4 in DXA
 const MARGIN = 1080;  // ~1.9cm
