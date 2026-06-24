@@ -122,7 +122,8 @@ export default function App() {
   };
 
   const handlePrint = () => {
-    window.print();
+    setActiveTab('preview');
+    setTimeout(() => window.print(), 300);
   };
 
   return (
