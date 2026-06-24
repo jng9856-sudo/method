@@ -1,293 +1,200 @@
 from http.server import BaseHTTPRequestHandler
-import json, io, base64, zipfile, re, copy, os, shutil, tempfile
+import json, io, base64, zipfile, re, os
 
 TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), 'template.docx')
 
-def replace_text_at_index(content, target_text, new_text, occurrence=0):
-    """XML에서 특정 텍스트를 새 텍스트로 교체 (n번째 발생)"""
-    pattern = r'(<w:t[^>]*>)(' + re.escape(target_text) + r')(</w:t>)'
-    count = [0]
-    def replacer(m):
-        if count[0] == occurrence:
-            count[0] += 1
-            return m.group(1) + new_text + m.group(3)
-        count[0] += 1
-        return m.group(0)
-    return re.sub(pattern, replacer, content)
 
-def replace_all(content, target_text, new_text):
-    """XML에서 특정 텍스트 모두 교체"""
-    pattern = r'(<w:t[^>]*>)(' + re.escape(target_text) + r')(</w:t>)'
-    return re.sub(pattern, lambda m: m.group(1) + new_text + m.group(3), content)
+def modify_docx(d):
+    import re as RE
 
-def set_changed_style(content, target_text, occurrence=0):
-    """특정 텍스트의 run에 bold+italic+underline 스타일 추가"""
-    # 해당 텍스트를 찾아 그 run에 rPr 추가
-    pattern = r'(<w:r>(?:<w:rPr>.*?</w:rPr>)?<w:t[^>]*>)(' + re.escape(target_text) + r')(</w:t></w:r>)'
-    new_rpr = '<w:rPr><w:b/><w:i/><w:u w:val="single"/></w:rPr>'
-    count = [0]
-    def replacer(m):
-        if count[0] == occurrence:
-            count[0] += 1
-            return '<w:r>' + new_rpr + '<w:t>' + m.group(2) + '</w:t></w:r>'
-        count[0] += 1
-        return m.group(0)
-    return re.sub(pattern, replacer, content, flags=re.DOTALL)
-
-def modify_docx(data):
-    d = data
     fc = d.get('flowConditions', {})
     materials = d.get('materials', [])
     specs = d.get('specs', [])
     qa_specs = d.get('qaSpecs', [])
 
-    # 원본 docx 읽기
+    STYLE = '<w:b/><w:i/><w:u w:val="single"/>'
+
+    def rx_all(content, target, new):
+        pattern = r'(<w:t[^>]*>)(' + RE.escape(target) + r')(</w:t>)'
+        return RE.sub(pattern, lambda m: m.group(1) + new + m.group(3), content)
+
+    def rx_nth(content, target, new, n=0):
+        pattern = r'(<w:t[^>]*>)(' + RE.escape(target) + r')(</w:t>)'
+        count = [0]
+        def rep(m):
+            if count[0] == n:
+                count[0] += 1
+                return m.group(1) + new + m.group(3)
+            count[0] += 1
+            return m.group(0)
+        return RE.sub(pattern, rep, content)
+
+    def add_style(content, text):
+        style = STYLE
+        pat = r'(<w:r[^>]*>)(<w:rPr>)(.*?)(</w:rPr>)(<w:t[^>]*>' + RE.escape(text) + r'</w:t></w:r>)'
+        result = RE.sub(pat, lambda m: m.group(1)+m.group(2)+m.group(3)+style+m.group(4)+m.group(5), content, flags=RE.DOTALL)
+        if result == content:
+            pat2 = r'(<w:r[^>]*>)(<w:t[^>]*>' + RE.escape(text) + r'</w:t></w:r>)'
+            result = RE.sub(pat2, lambda m: m.group(1)+'<w:rPr>'+style+'</w:rPr>'+m.group(2), content, flags=RE.DOTALL)
+        return result
+
     with open(TEMPLATE_PATH, 'rb') as f:
         docx_bytes = f.read()
-    
-    # zip으로 열기
+
     zin = zipfile.ZipFile(io.BytesIO(docx_bytes))
     zout_buf = io.BytesIO()
     zout = zipfile.ZipFile(zout_buf, 'w', zipfile.ZIP_DEFLATED)
-    
+
     for item in zin.infolist():
-        data_bytes = zin.read(item.filename)
-        
+        data = zin.read(item.filename)
+
         if item.filename == 'word/document.xml':
-            content = data_bytes.decode('utf-8')
-            
-            # ── 문서번호 교체 (3곳: 제조법1/4, 제품보증규격) ──
+            c = data.decode('utf-8')
+
+            # 문서유형
+            doc_type = d.get('docType', 'Be품')
+            if doc_type == '일반':
+                be_pat = r'<w:t xml:space="preserve"> </w:t></w:r><w:r[^>]*>.*?<w:t>\(Be</w:t></w:r><w:r[^>]*>.*?<w:t>품\)</w:t></w:r>'
+                c = RE.sub(be_pat, '<w:t></w:t></w:r>', c, flags=RE.DOTALL)
+
+            # 문서번호
             doc_no = d.get('docNo', 'KPXGC-R41-1057')
-            content = replace_all(content, 'KPXGC-R41-1057', doc_no)
-            qa_doc_no = doc_no.replace('R41', 'R32')
-            content = replace_all(content, 'KPXGC-R32-1057', qa_doc_no)
-            
-            # ── 제품명 교체 ──
+            c = rx_all(c, 'KPXGC-R41-1057', doc_no)
+            c = rx_all(c, 'KPXGC-R32-1057', doc_no.replace('R41','R32'))
+
+            # 제품명 (PEG-400 + B + e 3run 패턴)
             product = d.get('productName', 'PEG-400Be')
-            content = replace_all(content, 'PEG-400Be', product)
-            # KONION 품질보증규격용
-            content = replace_all(content, 'KONION PEG-400Be', f'KONION {product}')
-            
-            # ── 제정일자 교체 ──
-            est_date = d.get('establishDate', '2009년 01월 15일')
-            content = replace_all(content, '2009년 01월 15일', est_date)
-            
-            # ── 개정일자: '2' + '026년' + ' ' + '04월' + ' ' + '03일' 패턴 처리 ──
-            # 개정일자가 '2026년 04월 03일'처럼 쪼개져 있음
-            rev_date = d.get('revisionDate', '')
+            peg_pat = r'PEG-400</w:t></w:r><w:r[^>]*><w:rPr>.*?</w:rPr><w:t>B</w:t></w:r><w:r[^>]*>.*?<w:t>e</w:t></w:r>'
+            c = RE.sub(peg_pat, product+'</w:t></w:r><w:r><w:t></w:t></w:r><w:r><w:t></w:t></w:r>', c, flags=RE.DOTALL)
+            c = rx_all(c, 'KONION PEG-400Be', 'KONION '+product)
+            c = rx_all(c, 'PEG-400Be', product)
+
+            # 제정일자
+            c = rx_all(c, '2009년 01월 15일', d.get('establishDate','2009년 01월 15일'))
+
+            # 개정일자
+            rev_date = d.get('revisionDate','')
             if rev_date:
-                # '2' -> 연도 앞자리, '026년' -> 뒷자리 등으로 쪼개진 날짜 처리
-                # 가장 간단한 방법: 통째로 교체
-                # 패턴: <w:t>2</w:t>...<w:t>026년</w:t>...<w:t> </w:t>...<w:t>04월</w:t>
-                # '2026년 04월 03일' → rev_date 로 교체 (첫번째 run만 교체, 나머지 run 빈값으로)
-                content = content.replace(
-                    '<w:t>2</w:t>\n            </w:r>\n            <w:r>\n              <w:rPr>\n                <w:rFonts w:hint="eastAsia"/>\n              </w:rPr>\n              <w:t xml:space="preserve">026년</w:t>\n            </w:r>\n            <w:r>\n              <w:rPr>\n                <w:rFonts w:hint="eastAsia"/>\n              </w:rPr>\n              <w:t xml:space="preserve"> </w:t>\n            </w:r>\n            <w:r>\n              <w:rPr>\n                <w:rFonts w:hint="eastAsia"/>\n              </w:rPr>\n              <w:t xml:space="preserve">04월</w:t>\n            </w:r>\n            <w:r>\n              <w:rPr>\n                <w:rFonts w:hint="eastAsia"/>\n              </w:rPr>\n              <w:t xml:space="preserve"> </w:t>\n            </w:r>\n            <w:r>\n              <w:rPr>\n                <w:rFonts w:hint="eastAsia"/>\n              </w:rPr>\n              <w:t>03일</w:t>',
-                    f'<w:t>{rev_date}</w:t>\n            </w:r>\n            <w:r><w:t></w:t>\n            </w:r>\n            <w:r><w:t></w:t>\n            </w:r>\n            <w:r><w:t></w:t>\n            </w:r>\n            <w:r><w:t></w:t>\n            </w:r>\n            <w:r><w:t></w:t>'
-                )
-            
-            # ── 개정번호 교체 ──
-            rev_no = d.get('revisionNo', '1')
-            # '1'은 너무 많으니 맥락으로 찾기 - 개정번호 라벨 다음의 '1'
-            content = re.sub(
-                r'(개정번호</w:t>.*?<w:t[^>]*>)1(</w:t>)',
-                lambda m: m.group(1) + str(rev_no) + m.group(2),
-                content, flags=re.DOTALL
-            )
-            
-            # ── 원료 교체 (Material Balance) ──
-            # 기존 원료: C=Ethylene glycol(EG)/214.7, B=KOH(96%)/0.76, A=EO/785.3
-            old_materials = [
-                ('Ethylene glycol(EG)', '214.7'),
-                ('KOH(96%)', '0.76'),
-                ('EO', '785.3'),
-            ]
+                date_pat = r'<w:t>2</w:t></w:r>\s*<w:r[^>]*><w:rPr>.*?</w:rPr><w:t xml:space="preserve">026년</w:t></w:r>\s*<w:r[^>]*><w:rPr>.*?</w:rPr><w:t xml:space="preserve"> </w:t></w:r>\s*<w:r[^>]*><w:rPr>.*?</w:rPr><w:t xml:space="preserve">04월</w:t></w:r>\s*<w:r[^>]*><w:rPr>.*?</w:rPr><w:t xml:space="preserve"> </w:t></w:r>\s*<w:r[^>]*><w:rPr>.*?</w:rPr><w:t>03일</w:t>'
+                repl = '<w:t>'+rev_date+'</w:t></w:r><w:r><w:t></w:t></w:r><w:r><w:t></w:t></w:r><w:r><w:t></w:t></w:r><w:r><w:t></w:t></w:r><w:r><w:t></w:t'
+                c = RE.sub(date_pat, repl, c, flags=RE.DOTALL)
+
+            # 개정번호
+            rev_no = str(d.get('revisionNo','1'))
+            c = RE.sub(r'(개정번호</w:t>.*?<w:t[^>]*>)1(</w:t>)', lambda m: m.group(1)+rev_no+m.group(2), c, flags=RE.DOTALL)
+
+            # 원료 교체
+            old_amts = ['214.7', '0.76', '785.3']
             for i, mat in enumerate(materials[:3]):
-                if i < len(old_materials):
-                    old_name, old_amt = old_materials[i]
-                    new_name = mat.get('name', '')
-                    new_amt = mat.get('amount', '')
-                    if new_name and new_name != old_name:
-                        content = replace_text_at_index(content, old_name, new_name, 0)
-                    if new_amt and new_amt != old_amt:
-                        content = replace_text_at_index(content, old_amt, new_amt, 0)
-            
-            # ── TOTAL 교체 ──
-            total = d.get('totalAmount', '1000.76')
-            if total and total != '1000.76':
-                content = replace_all(content, '1000.76', total)
-            
-            # ── 공정 조건 교체 ──
-            starter = fc.get('starter', 'EG')
-            catalyst = fc.get('catalyst', 'KOH(96%)')
-            reactant = fc.get('reactant', 'EO')
-            react_temp = fc.get('reactionTemp', '140')
-            react_pres = fc.get('reactionPressure', '4')
-            aging_temp = fc.get('agingTemp', '140')
-            aging_pres = fc.get('agingPressure', '4')
-            deodor_temp = fc.get('deodorTemp', '80')
-            packing_temp = fc.get('packingTemp', '60')
-            reactor_no = fc.get('reactorNo', 'V-302')
-            hazardous = fc.get('hazardous', '해당없음')
-            pkg_type = fc.get('packageType', 'Steel Drum (Net.Wt. : 230 kg)')
-            storage = fc.get('storage', '')
-            handling = fc.get('handling', '')
-            disposal = fc.get('disposal', '')
+                new_name = mat.get('name','') or ''
+                new_amt = mat.get('amount','') or old_amts[i]
+                changed = mat.get('changed', False)
 
-            # Flow sheet: EG, KOH(96%) 라벨
-            content = content.replace('>EG    KOH(96%)<', f'>{starter}    {catalyst}<')
-            content = content.replace('>EG<', f'>{starter}<')
-            content = content.replace('>    KOH(96%)<', f'>    {catalyst}<')
-            content = content.replace('>, KOH(96%)를 <', f'>, {catalyst}를 <')
-            
-            # EO → reactant 교체 (여러 곳)
-            content = content.replace('>EO<', f'>{reactant}<')
-            
-            # 반응온도 승온 텍스트
-            content = content.replace(
-                '>    반응온도까지 승온한다.(140<',
-                f'>    반응온도까지 승온한다.({react_temp}<'
-            )
-            # 반응온도 조건
-            content = content.replace(
-                '>     * 반응온도 : 140 ± 5<',
-                f'>     * 반응온도 : {react_temp} ± 5<'
-            )
-            # 반응압력
-            content = content.replace(
-                '>     * 반응압력 : 4 kg/cm<',
-                f'>     * 반응압력 : {react_pres} kg/cm<'
-            )
-            # 반응시간 (EO 포함)
-            content = content.replace(
-                '>     * 반응시간 : 지시량의 EO 사입 종료까지<',
-                f'>     * 반응시간 : 지시량의 {reactant} 사입 종료까지<'
-            )
-            # 숙성 - EO 사입이 종료
-            content = content.replace(
-                '>    지시량의 EO 사입이 종료되면 아래의 조건에서 숙성을 실시한다.<',
-                f'>    지시량의 {reactant} 사입이 종료되면 아래의 조건에서 숙성을 실시한다.<'
-            )
-            # 숙성온도
-            content = content.replace(
-                '>     * 숙성온도 : 140 ± 5<',
-                f'>     * 숙성온도 : {aging_temp} ± 5<'
-            )
-            # 숙성압력
-            content = content.replace(
-                '>     * 숙성압력 : 4 kg/cm<',
-                f'>     * 숙성압력 : {aging_pres} kg/cm<'
-            )
-            # 탈취온도
-            content = content.replace(
-                '탈취온도(80±5℃)에서',
-                f'탈취온도({deodor_temp}±5℃)에서'
-            )
-            # 포장온도
-            content = content.replace(
-                '>: 60℃ 이하<',
-                f'>: {packing_temp}℃ 이하<'
-            )
-            # 4.0 제조기계
-            content = content.replace(
-                '>    V-302 Reactor Type<',
-                f'>    {reactor_no} Reactor Type<'
-            )
-            # 5.0 유해물질
-            content = content.replace(
-                '>    해당없음<',
-                f'>    {hazardous}<'
-            )
-            # 6.0 포장용기
-            content = content.replace(
-                '>    Steel Drum (Net.Wt. : 230 kg)<',
-                f'>    {pkg_type}<'
-            )
-            # 7.1 저장
+                if i == 0:
+                    eg_pat = r'Ethylene glycol\(</w:t></w:r>.*?<w:t>EG</w:t></w:r>.*?<w:t>\)</w:t></w:r>'
+                    style_str = STYLE if changed else ''
+                    repl_run = '<w:r><w:rPr><w:rFonts w:ascii="굴림체" w:hAnsi="굴림체"/>'+style_str+'</w:rPr><w:t>'+new_name+'</w:t></w:r>'
+                    c = RE.sub(eg_pat, repl_run, c, count=1, flags=RE.DOTALL)
+                elif i == 1:
+                    c = rx_nth(c, 'KOH(96%)', new_name, 0)
+                    if changed: c = add_style(c, new_name)
+                elif i == 2:
+                    c = rx_nth(c, 'EO', new_name, 0)
+                    if changed: c = add_style(c, new_name)
+
+                c = rx_nth(c, old_amts[i], new_amt, 0)
+                if changed: c = add_style(c, new_amt)
+
+            # TOTAL
+            total = d.get('totalAmount','1000.76')
+            if total:
+                c = rx_all(c, '1000.76', total)
+
+            # 제품규격
+            spec_map = {s.get('item','').strip(): s for s in specs if s.get('item')}
+
+            color_s = spec_map.get('색       상', {})
+            if color_s.get('spec') and color_s['spec'] != '20 이하':
+                c = rx_all(c, '20 이하', color_s['spec'])
+                if color_s.get('changed'): c = add_style(c, color_s['spec'])
+
+            mw_s = spec_map.get('평균분자량', {})
+            new_mw = mw_s.get('spec','270 ~ 300') if mw_s else '270 ~ 300'
+            c = rx_all(c, '270 ~ 300', new_mw)
+            if mw_s and mw_s.get('changed'): c = add_style(c, new_mw)
+
+            # 공정조건
+            starter = fc.get('starter','EG')
+            catalyst = fc.get('catalyst','KOH(96%)')
+            reactant = fc.get('reactant','EO')
+            react_temp = fc.get('reactionTemp','140')
+            react_pres = fc.get('reactionPressure','4')
+            aging_temp = fc.get('agingTemp','140')
+            aging_pres = fc.get('agingPressure','4')
+            deodor_temp = fc.get('deodorTemp','80')
+            packing_temp = fc.get('packingTemp','60')
+            reactor_no = fc.get('reactorNo','V-302')
+            hazardous = fc.get('hazardous','해당없음')
+            pkg_type = fc.get('packageType','Steel Drum (Net.Wt. : 230 kg)')
+            storage = fc.get('storage','')
+            handling = fc.get('handling','')
+            disposal = fc.get('disposal','')
+
+            c = c.replace('>EG    KOH(96%)<', '>'+starter+'    '+catalyst+'<')
+            c = c.replace('>EG<', '>'+starter+'<')
+            c = c.replace('>    KOH(96%)<', '>    '+catalyst+'<')
+            c = c.replace('>, KOH(96%)를 <', '>, '+catalyst+'를 <')
+            c = c.replace('>EO<', '>'+reactant+'<')
+            c = c.replace('반응온도까지 승온한다.(140', '반응온도까지 승온한다.('+react_temp)
+            c = c.replace('반응온도 : 140 ± 5', '반응온도 : '+react_temp+' ± 5')
+            c = c.replace('반응압력 : 4 kg/cm', '반응압력 : '+react_pres+' kg/cm')
+            c = c.replace('반응시간 : 지시량의 EO 사입 종료까지', '반응시간 : 지시량의 '+reactant+' 사입 종료까지')
+            c = c.replace('지시량의 EO 사입이 종료되면 아래의 조건에서 숙성을 실시한다.', '지시량의 '+reactant+' 사입이 종료되면 아래의 조건에서 숙성을 실시한다.')
+            c = c.replace('숙성온도 : 140 ± 5', '숙성온도 : '+aging_temp+' ± 5')
+            c = c.replace('숙성압력 : 4 kg/cm', '숙성압력 : '+aging_pres+' kg/cm')
+            c = c.replace('탈취온도(80\u00b15\u2103)에서', '탈취온도('+deodor_temp+'\u00b15\u2103)에서')
+            c = c.replace(': 60\u2103 이하', ': '+packing_temp+'\u2103 이하')
+            c = c.replace('    V-302 Reactor Type', '    '+reactor_no+' Reactor Type')
+            c = c.replace('    해당없음', '    '+hazardous)
+            c = c.replace('    Steel Drum (Net.Wt. : 230 kg)', '    '+pkg_type)
+
             if storage:
-                # 저장 텍스트가 run으로 쪼개져 있음: "옥내외에...생산일로부터 " + "1" + "년으로 하며..."
-                import re as _re
-                storage_pattern = r'(옥내외에 저장하고 보존기간은 생산일로부터 )</w:t></w:r>.*?<w:t>1</w:t></w:r>.*?<w:t>(년으로 하며, 선입선출을 원칙으로 한다.)</w:t>'
-                if _re.search(storage_pattern, content, _re.DOTALL):
-                    content = _re.sub(
-                        storage_pattern,
-                        storage + '</w:t>',
-                        content, count=1, flags=_re.DOTALL
-                    )
-                else:
-                    content = content.replace('옥내외에 저장하고 보존기간은 생산일로부터 ', storage)
-            # 7.2 취급
+                st_pat = r'옥내외에 저장하고 보존기간은 생산일로부터 </w:t></w:r><w:r[^>]*><w:rPr>.*?</w:rPr><w:t>1</w:t></w:r><w:r[^>]*><w:rPr>.*?</w:rPr><w:t>년으로 하며, 선입선출을 원칙으로 한다.</w:t>'
+                c = RE.sub(st_pat, storage+'</w:t>', c, flags=RE.DOTALL)
             if handling:
-                content = content.replace(
-                    '     피부나 눈에 접촉시 약간의 자극을 줄 수 있으므로 보호구 및 안전장갑을 착용, 취급한다.',
-                    f'     {handling}'
-                )
-            # 7.3 폐기
+                c = c.replace('     피부나 눈에 접촉시 약간의 자극을 줄 수 있으므로 보호구 및 안전장갑을 착용, 취급한다.', '     '+handling)
             if disposal:
-                content = content.replace(
-                    '     폐기물관리법 제 25 조에 준한다.',
-                    f'     {disposal}'
-                )
+                c = c.replace('     폐기물관리법 제 25 조에 준한다.', '     '+disposal)
 
-            # ── 제품규격 교체 ──
-            # 색상: '20 이하' -> 새 값
-            # 수분: '0' + '.1 이하' 패턴
-            # 평균분자량: '270 ~ 300'
-            spec_map = {s.get('item', '').strip(): s for s in specs if s.get('item')}
-            
-            # 색상 규격
-            color_spec = spec_map.get('색       상', {})
-            if color_spec and color_spec.get('spec') and color_spec['spec'] != '20 이하':
-                content = replace_all(content, '20 이하', color_spec['spec'])
-            
-            # 수분 규격 (0 + .1 이하 = '0.1 이하')  
-            water_spec = spec_map.get('수   분 (%)', {})
-            if water_spec and water_spec.get('spec') and water_spec['spec'] != '0.1 이하':
-                # 패턴 처리
-                content = content.replace(
-                    '<w:t>0</w:t>\n            </w:r>\n            <w:r>\n              <w:t>.1 이하</w:t>',
-                    f'<w:t>{water_spec["spec"]}</w:t>\n            </w:r>\n            <w:r>\n              <w:t></w:t>'
-                )
-            
-            # 평균분자량 규격 (여러 곳에 있음)
-            mw_spec = spec_map.get('평균분자량', {})
-            new_mw = mw_spec.get('spec', '270 ~ 300') if mw_spec else '270 ~ 300'
-            changed_mw = mw_spec.get('changed', False) if mw_spec else False
-            content = replace_all(content, '270 ~ 300', new_mw)
-            
-            # ── 개정내용 교체 ──
-            rev_note = d.get('revisionNote', '')
+            # 개정내용
+            rev_note = d.get('revisionNote','')
             if rev_note:
-                content = replace_all(content, '원단위 및 제품규격 평균분자량 개정', rev_note)
-                content = replace_all(content, '원단위 ', rev_note[:10])
-                
-            # ── 배포처 교체 ──
-            dist_mfg = d.get('distributionMfg', '')
-            if dist_mfg:
-                content = replace_all(content, '케미칼생산팀 사본 1부', dist_mfg)
-            dist_qa = d.get('distributionQuality', '')
-            if dist_qa:
-                content = replace_all(content, '케미칼품질팀 사본 2부', dist_qa)
-            dist_qb = d.get('qaDistribution', '')
-            if dist_qb:
-                content = replace_all(content, '케미칼 품질팀 사본 1부', dist_qb)
-            
-            # ── 품질보증규격 개정일자 (03월 25일) ──
-            qa_rev_date = d.get('qaRevisionDate', '') or d.get('revisionDate', '')
-            if qa_rev_date:
-                content = content.replace(
-                    '>03월<', f'>{qa_rev_date}<'
-                ).replace('>25일<', '><')
-            
-            # ── 품질보증 보존기간 ──
-            preservation = d.get('qaPreservation', '2 년')
-            content = replace_all(content, '2 년', preservation)
-            
-            # ── 작성/검토/승인은 서명란이라 비워져 있으므로 생략 ──
-            
-            data_bytes = content.encode('utf-8')
-        
-        zout.writestr(item, data_bytes)
-    
+                c = c.replace('원단위 및 제품규격 평균분자량 개정', rev_note)
+
+            # 배포처
+            if d.get('distributionMfg'): c = c.replace('케미칼생산팀 사본 1부', d['distributionMfg'])
+            if d.get('distributionQuality'): c = c.replace('케미칼품질팀 사본 2부', d['distributionQuality'])
+            if d.get('qaDistribution'): c = c.replace('케미칼 품질팀 사본 1부', d['qaDistribution'])
+
+            # 품질보증 개정일자
+            qa_rev = d.get('qaRevisionDate','') or d.get('revisionDate','')
+            if qa_rev:
+                c = c.replace('>03월<', '>'+qa_rev+'<').replace('>25일<', '><')
+
+            # 품질보증 규격 changed 스타일
+            for qs in qa_specs:
+                if qs.get('spec') and qs.get('changed'):
+                    c = add_style(c, qs['spec'])
+
+            # 보존기간
+            preservation = d.get('qaPreservation','2 년')
+            if preservation != '2 년':
+                c = rx_all(c, '2 년', preservation)
+
+            data = c.encode('utf-8')
+
+        zout.writestr(item, data)
+
     zout.close()
     return zout_buf.getvalue()
 
@@ -297,7 +204,6 @@ class handler(BaseHTTPRequestHandler):
         length = int(self.headers.get('Content-Length', 0))
         body = self.rfile.read(length)
         data = json.loads(body)
-        
         try:
             docx_bytes = modify_docx(data)
             b64 = base64.b64encode(docx_bytes).decode()
@@ -313,7 +219,7 @@ class handler(BaseHTTPRequestHandler):
             self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             self.wfile.write(json.dumps({'error': str(e), 'trace': traceback.format_exc()}).encode())
-    
+
     def do_OPTIONS(self):
         self.send_response(200)
         self.send_header('Access-Control-Allow-Origin', '*')
