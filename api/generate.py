@@ -91,7 +91,8 @@ def modify_docx(d):
                 changed = mat.get('changed', False)
 
                 if i == 0:
-                    eg_pat = r'Ethylene glycol\(</w:t></w:r>.*?<w:t>EG</w:t></w:r>.*?<w:t>\)</w:t></w:r>'
+                    # 앞 <w:r> 태그까지 포함해서 교체 (XML 구조 유지)
+                    eg_pat = r'<w:r><w:rPr><w:rFonts w:ascii="굴림체"[^<]*</w:rPr><w:t>Ethylene glycol\(</w:t></w:r><w:r[^>]*><w:rPr>.*?</w:rPr><w:t>EG</w:t></w:r><w:r[^>]*><w:rPr>.*?</w:rPr><w:t>\)</w:t></w:r>'
                     style_str = STYLE if changed else ''
                     repl_run = '<w:r><w:rPr><w:rFonts w:ascii="굴림체" w:hAnsi="굴림체"/>'+style_str+'</w:rPr><w:t>'+new_name+'</w:t></w:r>'
                     c = RE.sub(eg_pat, repl_run, c, count=1, flags=RE.DOTALL)
